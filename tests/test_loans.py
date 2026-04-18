@@ -43,6 +43,20 @@ def test_zero_interest_loan():
     assert loan.schedule["balance"][-1] == Decimal("0")
 
 
+def test_from_budget_roundtrips_with_from_terms():
+    loan = AmortizedLoan.from_budget(1500, 0.06, 360)
+    assert abs(loan.payment - Decimal("1500.00")) <= Decimal("0.01")
+    assert loan.num_payments == 360
+    assert loan.annual_rate == Decimal("0.06")
+
+
+def test_from_budget_zero_interest():
+    loan = AmortizedLoan.from_budget(500, 0, 24)
+    assert loan.principal == Decimal("12000.00")
+    assert loan.payment == Decimal("500.00")
+    assert loan.total_interest == Decimal("0")
+
+
 @pytest.mark.parametrize(
     "principal, rate",
     [

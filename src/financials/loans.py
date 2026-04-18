@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 
 import polars as pl
 
@@ -129,3 +129,50 @@ class AmortizedLoan:
             total_cost=total_cost,
             schedule=schedule,
         )
+
+    @classmethod
+    def from_budget(
+        cls,
+        max_payment: Number,
+        annual_rate: Number,
+        num_payments: int,
+    ) -> "AmortizedLoan":
+        """Build an :class:`AmortizedLoan` from a monthly-payment budget.
+
+        Answers the question: "If I can afford no more than ``max_payment`` per
+        month at this rate and term, how much can I borrow?" The maximum
+        principal is computed in closed form by inverting the amortization
+        formula — no iteration required.
+
+        Args:
+            max_payment: Target monthly payment ceiling. Accepts ``int``,
+                ``float``, ``str``, or ``Decimal``.
+            annual_rate: APR as a fraction (``0.06`` for 6%).
+            num_payments: Number of monthly payments.
+
+        Returns:
+            An :class:`AmortizedLoan` whose principal is the largest amount
+            (rounded down to the cent) that fits under ``max_payment`` at the
+            given rate and term.
+
+        Note:
+            Because :meth:`from_terms` rounds the monthly payment to the nearest
+            cent, the resulting ``loan.payment`` may differ from ``max_payment``
+            by up to a cent in either direction. For rough life-planning this
+            is noise; if you need a strict ceiling, subtract a cent from
+            ``max_payment`` before calling.
+        """
+        budget = _to_decimal(max_payment)
+        apr = _to_decimal(annual_rate)
+        n = int(num_payments)
+
+        r = apr / 12
+
+        if r == 0:
+            principal = budget * n
+        else:
+            growth = (1 + r) ** n
+            principal = budget * (growth - 1) / (r * growth)
+
+        principal = principal.quantize(_CENT, rounding=ROUND_DOWN)
+        return cls.from_terms(principal, apr, n)
